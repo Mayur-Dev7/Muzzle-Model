@@ -57,11 +57,26 @@ def detect_hardware():
     )
     rosetta_translated = _sysctl_value("sysctl.proc_translated") == "1"
 
-    chip_name = (
-        _sysctl_value("machdep.cpu.brand_string")
-        or platform.processor()
-        or ("Apple Silicon (model unavailable)" if is_apple_silicon else machine)
-    )
+    chip_name = _sysctl_value("machdep.cpu.brand_string") or platform.processor()
+    if is_apple_silicon and (not chip_name or chip_name.lower() in {"arm", "arm64", "aarch64"}):
+        # Apple Silicon often reports a generic architecture through platform.processor().
+        try:
+            profiler = subprocess.run(
+                ["system_profiler", "SPHardwareDataType"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=3,
+                check=False,
+            )
+            for line in profiler.stdout.splitlines():
+                label, separator, value = line.strip().partition(":")
+                if separator and label.strip().lower() in {"chip", "processor name"} and value.strip():
+                    chip_name = value.strip()
+                    break
+        except (OSError, subprocess.SubprocessError):
+            pass
+    chip_name = chip_name or ("Apple Silicon (model unavailable)" if is_apple_silicon else machine)
 
     def _positive_int(value):
         try:
@@ -121,12 +136,14 @@ def validate_tensorflow_runtime():
     except (AttributeError, ValueError):
         version_parts = ()
 
-    if not version_parts or version_parts < (2, 13):
+    if not version_parts or version_parts < (2, 13) or version_parts >= (2, 16):
         raise RuntimeError(
-            "This repository requires TensorFlow 2.13 or newer on Apple Silicon; "
-            f"the detected TensorFlow package is {version!r}. TensorFlow 1.15.x "
-            "is not compatible with this ARM64 setup. Create a fresh native ARM64 "
-            "virtual environment and run: python -m pip install -r requirements.txt"
+            "This Matterport Mask R-CNN codebase requires TensorFlow >=2.13,<2.16 "
+            "for its legacy Keras API; the detected TensorFlow package is "
+            f"{version!r}. TensorFlow 1.15.x is incompatible with Apple Silicon, "
+            "and TensorFlow 2.16+ uses Keras 3, which this codebase has not been "
+            "ported to. Create a fresh native ARM64 virtual environment and run: "
+            "python -m pip install -r requirements.txt"
         )
 
 
