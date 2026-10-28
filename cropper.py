@@ -18,9 +18,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-# Import centralized configuration & enforce hardware lock BEFORE TensorFlow imports
+# Import centralized configuration & enforce hardware lock BEFORE TensorFlow imports.
+# Validate native Apple Silicon Python / supported TensorFlow before importing TF.
 import config
 config.enforce_cpu_lock()
+config.validate_tensorflow_runtime()
 
 import cv2
 import numpy as np
