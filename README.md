@@ -9,7 +9,7 @@
 
 A standalone, pure Python engine for bovine biometric recognition. Detects cattle muzzles from video or still images, extracts normalized dermatoglyphic crops, applies 2x Lanczos-4 sinc super-resolution with CLAHE enhancement, and performs 1:1 biometric identity verification using ORB feature matching (reproducing the `statusprint.py` algorithm).
 
-> **Hardware Guarantee**: This codebase is specifically optimized and hard-locked to run strictly on **2 CPU cores** (`{0, 1}`) with zero GPU dependencies.
+> **Hardware behavior**: CPU-only inference with a default **2-thread limit**. Linux can apply process CPU affinity where supported; macOS does not expose `sched_setaffinity`, so it uses TensorFlow/OpenCV/BLAS thread limits instead. Apple Silicon is detected explicitly, and the runtime warns with an actionable error if Python is running under Rosetta or an unsupported TensorFlow version is installed.
 
 ---
 
@@ -20,7 +20,7 @@ The system has been verified and tested with the following exact versions:
 | Component / Library | Exact Version | Purpose / Role |
 | :--- | :---: | :--- |
 | **Python** | `3.8.20` (Supports 3.8 - 3.10) | Runtime language environment |
-| **TensorFlow** | `2.13.1` | Deep learning backend (CPU inference) |
+| **TensorFlow** | `2.13.x`–`2.15.x` | Deep learning backend (CPU inference; `<2.16` required by the legacy Matterport/Keras API) |
 | **Keras** | `2.13.1` | Neural network graph & weight loading |
 | **OpenCV (`cv2`)** | `5.0.0` / `4.8.1.78` | Image processing, blur filtering, Lanczos-4 & ORB |
 | **NumPy** | `1.24.3` | Array math & tensor operations |
@@ -107,9 +107,24 @@ Bovine muzzle nose prints (bead and groove patterns) are biologically unique to 
 ## Step-by-Step Setup Guide
 
 ### 1. Prerequisites
-- **Operating System**: Linux (Ubuntu, Debian, Fedora, Arch, CentOS) or macOS / Windows WSL2.
-- **Python**: Version `3.8.x` (Recommended: Python `3.8.20` or `3.9.x`).
+- **Operating System**: Linux (Ubuntu, Debian, Fedora, Arch, CentOS) or macOS.
+- **Python**: Use Python `3.8`–`3.11`; Python `3.10` or `3.11` is recommended for a new setup. The TensorFlow dependency is pinned below `2.16` because this repository uses Matterport Mask R-CNN's legacy Keras API.
 - **Git & Git LFS**: Ensure Git and Git LFS are installed.
+
+#### Apple Silicon (M1/M2/M3/M4) — check architecture first
+
+Run these commands in the same terminal you will use for Python:
+
+```bash
+uname -m
+python3 -c 'import platform; print(platform.machine())'
+sysctl -n hw.optional.arm64
+sysctl -n sysctl.proc_translated 2>/dev/null || true
+```
+
+For a native Apple Silicon setup, `uname -m` and Python's architecture should be `arm64`; `hw.optional.arm64` should print `1`. If `sysctl.proc_translated` prints `1`, this process is running under Rosetta. Use a native ARM64 terminal and native ARM64 Python instead of reusing an x86_64 virtual environment.
+
+The detector is configured for CPU inference. It does **not** require NVIDIA CUDA, and macOS does not support the Linux-specific `os.sched_setaffinity()` control used by some Linux environments. The code applies portable thread limits on macOS.
 
 ```bash
 # Ubuntu / Debian
@@ -142,22 +157,27 @@ ls -lh weights/crop11dec.h5
 Create and activate an isolated Python virtual environment:
 
 ```bash
-python3.8 -m venv .venv
+# Use the Python version installed natively for your OS/architecture.
+# Apple Silicon: prefer native ARM64 Python 3.10 or 3.11.
+python3 -m venv .venv
 source .venv/bin/activate
 
+# Confirm that this virtual environment uses the intended architecture.
+python -c 'import platform, sys; print(platform.machine()); print(sys.executable)'
+
 # Upgrade packaging tools
-pip install --upgrade pip setuptools wheel
+python -m pip install --upgrade pip setuptools wheel
 ```
 
 ### 4. Install Dependencies
-Install all required CPU dependencies from `requirements.txt`:
+Install the pinned-compatible CPU dependencies from `requirements.txt`. TensorFlow 2.16+ is intentionally excluded until the repository's Matterport Mask R-CNN code is migrated away from its legacy Keras API:
 
 ```bash
 pip install -r requirements.txt
 ```
 
 ### 5. Verify Hardware & System Diagnostics
-Run the system diagnostics tool to confirm CPU core allocation and weights availability:
+Run the system diagnostics tool to inspect the chip model, operating system, Python architecture, Rosetta status, TensorFlow package version, CPU thread limits, and weights availability:
 
 ```bash
 python main.py info
@@ -168,7 +188,7 @@ You should see:
 ======================================================================
  CATTLE MUZZLE SYSTEM CONFIGURATION & HARDWARE DIAGNOSTICS
 ======================================================================
-[1] HARDWARE ALLOCATION & CPU LOCK (2 CORES)
+[1] HARDWARE & RUNTIME DIAGNOSTICS
 ╒════════════════════════╤══════════════════╕
 │ Parameter              │ Status / Value   │
 ╞════════════════════════╪══════════════════╡
