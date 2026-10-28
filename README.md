@@ -1,7 +1,7 @@
 # Cattle Muzzle Mask R-CNN & Biometric Verification System
 
 [![Python](https://img.shields.io/badge/Python-3.8.20-blue.svg)](https://www.python.org/)
-[![TensorFlow](https://img.shields.io/badge/TensorFlow-2.13.1-orange.svg)](https://tensorflow.org/)
+[![TensorFlow](https://img.shields.io/badge/TensorFlow-2.13--2.15-orange.svg)](https://tensorflow.org/)
 [![OpenCV](https://img.shields.io/badge/OpenCV-5.0.0-green.svg)](https://opencv.org/)
 [![Hardware](https://img.shields.io/badge/CPU%20Locked-2%20Cores-red.svg)]()
 [![GPU](https://img.shields.io/badge/GPU-Disabled%20(CPU--Only)-lightgrey.svg)]()
