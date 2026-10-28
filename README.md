@@ -19,7 +19,7 @@ The system has been verified and tested with the following exact versions:
 
 | Component / Library | Exact Version | Purpose / Role |
 | :--- | :---: | :--- |
-| **Python** | `3.8.20` (Supports 3.8 - 3.10) | Runtime language environment |
+| **Python** | `3.10` or `3.11` recommended | Runtime language environment; use a native ARM64 build on Apple Silicon |
 | **TensorFlow** | `2.13.x`–`2.15.x` | Deep learning backend (CPU inference; `<2.16` required by the legacy Matterport/Keras API) |
 | **Keras** | `2.13.1` | Neural network graph & weight loading |
 | **OpenCV (`cv2`)** | `5.0.0` / `4.8.1.78` | Image processing, blur filtering, Lanczos-4 & ORB |
@@ -82,9 +82,10 @@ flowchart TD
 
 Running deep ResNet-101 architectures on limited CPU resources requires specialized latency engineering:
 
-1. **Hardware Affinity Pinning**:
-   - Explicitly locks execution to cores `0` and `1` via `os.sched_setaffinity(0, {0, 1})`.
-   - Forces `CUDA_VISIBLE_DEVICES = "-1"` and limits `OMP_NUM_THREADS = 2`, `TF_NUM_INTRAOP_THREADS = 2`, and `cv2.setNumThreads(2)`.
+1. **Portable CPU Thread Limits**:
+   - Limits TensorFlow intra/inter-op, OpenMP, BLAS, and OpenCV threads to `CPU_CORES` (2 by default).
+   - Applies `os.sched_setaffinity()` only on platforms that support it. macOS does not expose this Linux-specific API, so it uses supported library thread limits rather than pinning logical CPU IDs.
+   - Forces `CUDA_VISIBLE_DEVICES = "-1"` because this repository is configured for CPU inference.
 2. **100 ROI Proposal Pruning**:
    - Default Mask R-CNN evaluates 1,000 candidate regions of interest (ROIs). Because cattle video frames feature 1 prominent animal face, pruning to 100 ROIs (`POST_NMS_ROIS_INFERENCE = 100`) saves 40% forward-pass compute with **100% recall**.
 3. **Motion Blur Pre-filtering**:
@@ -192,11 +193,14 @@ You should see:
 ╒════════════════════════╤══════════════════╕
 │ Parameter              │ Status / Value   │
 ╞════════════════════════╪══════════════════╡
-│ Target Device          │ CPU              │
-│ Force CPU Mode         │ True             │
-│ CUDA_VISIBLE_DEVICES   │ -1               │
-│ Configured CPU Cores   │ 2                │
-│ Linux CPU Affinity     │ [0, 1]           │
+│ Operating System       │ Darwin           │
+│ Detected Chip          │ Apple Silicon    │
+│ Hardware Architecture  │ arm64            │
+│ Apple Silicon Detected │ True             │
+│ Running Under Rosetta  │ False            │
+│ TensorFlow Version     │ 2.13.x–2.15.x    │
+│ Configured Thread Limit│ 2                │
+│ Process CPU Affinity   │ Not supported    │
 ╘════════════════════════╧══════════════════╛
 ```
 
