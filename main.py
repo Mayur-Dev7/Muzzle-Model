@@ -8,7 +8,7 @@ dermatoglyphic ridge enhancement, and video-to-video identity verification.
 Subcommands:
   compare  - Compare two cattle videos to verify if they are the same animal
   crop     - Detect and crop cattle muzzles from an image or video file
-  info     - Display hardware resource allocation, 2-core CPU lock, and weights status
+  info     - Display hardware, runtime architecture, CPU thread limits, and weights status
 """
 
 import os
@@ -35,28 +35,40 @@ def run_info(args):
     print(" CATTLE MUZZLE SYSTEM CONFIGURATION & HARDWARE DIAGNOSTICS")
     print("=" * 70)
 
-    # 1. Hardware Allocation & CPU Affinity
-    affinity_set = "N/A"
+    # 1. Host hardware, runtime architecture, and portable thread limits
+    hardware = config.detect_hardware()
+    affinity_set = "Not supported on this OS"
     if hasattr(os, "sched_getaffinity"):
         try:
-            affinity_set = str(sorted(list(os.sched_getaffinity(0))))
-        except Exception as e:
-            affinity_set = f"Error: {e}"
+            affinity_set = str(sorted(os.sched_getaffinity(0)))
+        except OSError as e:
+            affinity_set = f"Unavailable: {e}"
 
     cv2_threads = cv2.getNumThreads() if hasattr(cv2, "getNumThreads") else "N/A"
 
     hw_table = [
-        ["Target Device", config.DEVICE.upper()],
+        ["Operating System", hardware["system"]],
+        ["Detected Chip / Processor", hardware["chip_name"]],
+        ["Hardware Architecture", hardware["machine"]],
+        ["Apple Silicon Detected", str(hardware["is_apple_silicon"])],
+        ["Running Under Rosetta", str(hardware["rosetta_translated"])],
+        ["Python Process Architecture", hardware["machine"]],
+        ["Python Version", hardware["python_version"]],
+        ["Python Executable", hardware["python_executable"]],
+        ["TensorFlow Package Version", config.get_tensorflow_version()],
+        ["CPU Device Mode", config.DEVICE.upper()],
         ["Force CPU Mode", str(config.FORCE_CPU)],
         ["CUDA_VISIBLE_DEVICES", os.environ.get("CUDA_VISIBLE_DEVICES", "Not set")],
-        ["Configured CPU Cores", str(config.CPU_CORES)],
-        ["Linux CPU Affinity", affinity_set],
-        ["Total System CPU Cores", str(os.cpu_count())],
+        ["Configured Thread Limit", str(config.CPU_CORES)],
+        ["Physical CPU Cores", str(hardware["physical_cores"])],
+        ["Logical CPU Cores", str(hardware["logical_cores"])],
+        ["Process CPU Affinity (Linux)", affinity_set],
         ["OMP_NUM_THREADS", os.environ.get("OMP_NUM_THREADS", "Not set")],
         ["TF_NUM_INTRAOP_THREADS", os.environ.get("TF_NUM_INTRAOP_THREADS", "Not set")],
+        ["TF_NUM_INTEROP_THREADS", os.environ.get("TF_NUM_INTEROP_THREADS", "Not set")],
         ["OpenCV Thread Limit", str(cv2_threads)],
     ]
-    print("\n[1] HARDWARE ALLOCATION & CPU LOCK (2 CORES)")
+    print("\n[1] HARDWARE & RUNTIME DIAGNOSTICS")
     print(tabulate(hw_table, headers=["Parameter", "Status / Value"], tablefmt="fancy_grid"))
 
     # 2. Model Weights Status
@@ -110,7 +122,7 @@ def run_crop(args):
     weights_path = args.weights or config.WEIGHTS_PATH
     confidence = args.confidence or config.DETECTION_CONFIDENCE_THRESHOLD
 
-    print(f"\nInitializing 2-core CPU MuzzleCropper with weights: {weights_path}...")
+    print(f"\nInitializing CPU MuzzleCropper (thread limit: {config.CPU_CORES}) with weights: {weights_path}...")
     cropper = MuzzleCropper(weights_path=weights_path, confidence_threshold=confidence)
 
     if args.image:
@@ -203,7 +215,7 @@ def run_compare(args):
     weights_path = args.weights or config.WEIGHTS_PATH
     threshold = args.threshold or config.DUPLICATE_DECISION_THRESHOLD
 
-    print(f"\nInitializing 2-core CPU MuzzleMatcher with weights: {weights_path}...")
+    print(f"\nInitializing CPU MuzzleMatcher (thread limit: {config.CPU_CORES}) with weights: {weights_path}...")
     matcher = MuzzleMatcher(weights_path=weights_path)
 
     result = matcher.compare_videos(
